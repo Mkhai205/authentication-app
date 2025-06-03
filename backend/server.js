@@ -4,6 +4,7 @@ import cors from "cors";
 import connectDB from "./src/db/connect.js";
 import cookieParser from "cookie-parser";
 import fs from "node:fs";
+import errorHandler from "./src/controllers/auth/errorHandler.js";
 
 dotenv.config();
 
@@ -25,6 +26,9 @@ app.use(cookieParser());
 
 // Serve static files from the public directory
 app.use("/public", express.static("./src/public"));
+
+// Error handling middleware
+app.use(errorHandler);
 
 // routes
 const routesFiles = fs.readdirSync("./src/routes");
