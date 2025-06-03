@@ -1,5 +1,5 @@
 import expressAsyncHandler from "express-async-handler";
-import UserModel from "../../models/auth/UserModel.js";
+import UserModel from "../../models/auth/userModel.js";
 import TokenModel from "../../models/auth/tokenModel.js";
 import { generateToken, verifyToken } from "../../helpers/generateToken.js";
 import { hashToken, verificationToken } from "../../helpers/hashToken.js";
@@ -411,6 +411,42 @@ const resetPassword = expressAsyncHandler(async (req, res) => {
     res.status(200).json({ message: "Password reset successfully" });
 });
 
+const changePassword = expressAsyncHandler(async (req, res) => {
+    const { currentPassword, newPassword } = req.body;
+
+    // Validate input
+    if (!currentPassword || !newPassword) {
+        return res.status(400).json({ message: "Please provide current and new passwords" });
+    }
+
+    // Check if new password is valid
+    if (newPassword.length < 6) {
+        return res.status(400).json({ message: "New password must be at least 6 characters long" });
+    }
+
+    // Find the user
+    const user = await UserModel.findById(req.user._id);
+    if (!user) {
+        return res.status(404).json({ message: "User not found" });
+    }
+
+    // Compare current password
+    const isMatch = await user.comparePassword(currentPassword);
+    if (!isMatch) {
+        return res.status(400).json({ message: "Current password is incorrect" });
+    }
+
+    // Update password
+    user.password = newPassword; // This will trigger the pre-save middleware to hash the password
+    const updatedUser = await user.save();
+
+    if (!updatedUser) {
+        return res.status(500).json({ message: "Password change failed" });
+    }
+
+    res.status(200).json({ message: "Password changed successfully" });
+});
+
 export {
     registerUser,
     loginUser,
@@ -422,4 +458,5 @@ export {
     verifyUser,
     forgotPassword,
     resetPassword,
+    changePassword,
 };

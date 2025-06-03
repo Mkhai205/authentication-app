@@ -10,6 +10,7 @@ import {
     verifyUser,
     forgotPassword,
     resetPassword,
+    changePassword,
 } from "../controllers/auth/userController.js";
 import { deleteUser } from "../controllers/auth/adminController.js";
 import { getAllUsers } from "../controllers/auth/creatorMiddleware.js";
@@ -43,5 +44,8 @@ router.post("/forgot-password", forgotPassword);
 
 // reset password
 router.post("/reset-password/:resetPasswordToken", resetPassword);
+
+// change password (user must be logged in)
+router.patch("/change-password", protect, changePassword);
 
 export default router;
