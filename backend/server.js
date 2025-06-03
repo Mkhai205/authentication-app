@@ -23,6 +23,9 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
+// Serve static files from the public directory
+app.use("/public", express.static("./src/public"));
+
 // routes
 const routesFiles = fs.readdirSync("./src/routes");
 

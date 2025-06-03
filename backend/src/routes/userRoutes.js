@@ -7,6 +7,9 @@ import {
     updateUser,
     userLoginStatus,
     verifyEmail,
+    verifyUser,
+    forgotPassword,
+    resetPassword,
 } from "../controllers/auth/userController.js";
 import { deleteUser } from "../controllers/auth/adminController.js";
 import { getAllUsers } from "../controllers/auth/creatorMiddleware.js";
@@ -21,7 +24,7 @@ router.get("/user", protect, getUser);
 router.patch("/user", protect, updateUser);
 
 // admin routes
-router.delete("/admin/users/:id", protect, adminMiddleware, deleteUser);
+router.delete("/admin/users/:userId", protect, adminMiddleware, deleteUser);
 
 // get all users
 router.get("/users", protect, creatorMiddleware, getAllUsers);
@@ -31,5 +34,14 @@ router.get("/login-status", userLoginStatus);
 
 // verify user (email verification)
 router.post("/verify-email", protect, verifyEmail);
+
+// verify user email
+router.get("/verify-user/:verificationToken", verifyUser);
+
+// forgot password
+router.post("/forgot-password", forgotPassword);
+
+// reset password
+router.post("/reset-password/:resetPasswordToken", resetPassword);
 
 export default router;

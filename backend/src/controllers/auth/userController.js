@@ -2,14 +2,15 @@ import expressAsyncHandler from "express-async-handler";
 import UserModel from "../../models/auth/UserModel.js";
 import TokenModel from "../../models/auth/tokenModel.js";
 import { generateToken, verifyToken } from "../../helpers/generateToken.js";
-import { comparePassword, hashPassword } from "../../helpers/hashPassword.js";
 import { hashToken, verificationToken } from "../../helpers/hashToken.js";
 import sendEmail from "../../helpers/sendEmail.js";
 import "dotenv/config";
 
-// @desc   Register a new user
-// @route  POST /api/v1/register
-// @access Public
+/**
+ * @desc   Register a new user
+ * @route  POST /api/v1/register
+ * @access Public
+ */
 const registerUser = expressAsyncHandler(async (req, res) => {
     const { username, email, password } = req.body;
 
@@ -29,14 +30,11 @@ const registerUser = expressAsyncHandler(async (req, res) => {
         return res.status(400).json({ message: "User already exists" });
     }
 
-    // Encrypt password
-    const hashedPassword = await hashPassword(password);
-
-    // Create new user
+    // Create new user - password will be hashed automatically by pre middleware
     const user = await UserModel.create({
         username,
         email,
-        password: hashedPassword,
+        password, // Raw password - will be hashed by pre middleware
     });
 
     if (!user) {
@@ -67,9 +65,11 @@ const registerUser = expressAsyncHandler(async (req, res) => {
     });
 });
 
-// @desc   Login a user
-// @route  POST /api/v1/login
-// @access Public
+/**
+ * @desc   Login user
+ * @route  POST /api/v1/login
+ * @access Public
+ */
 const loginUser = expressAsyncHandler(async (req, res) => {
     const { email, password } = req.body;
 
@@ -79,8 +79,8 @@ const loginUser = expressAsyncHandler(async (req, res) => {
         return res.status(400).json({ message: "User not found" });
     }
 
-    // Compare password
-    const isPasswordMatch = await comparePassword(password, user.password);
+    // Compare password using the model method
+    const isPasswordMatch = await user.comparePassword(password);
     if (!isPasswordMatch) {
         return res.status(400).json({ message: "Invalid password" });
     }
@@ -109,18 +109,22 @@ const loginUser = expressAsyncHandler(async (req, res) => {
     });
 });
 
-// @desc   Logout user
-// @route  POST /api/v1/logout
-// @access Public
+/**
+ * @desc   Logout user
+ * @route  POST /api/v1/logout
+ * @access Private
+ */
 const logoutUser = expressAsyncHandler(async (req, res) => {
     res.clearCookie("token");
 
     return res.status(200).json({ message: "User logged out successfully" });
 });
 
-// @desc   Get user information
-// @route  GET /api/v1/user
-// @access Private
+/**
+ * @desc   Get user information
+ * @route  GET /api/v1/user
+ * @access Private(Creator, Admin)
+ */
 const getUser = expressAsyncHandler(async (req, res) => {
     const user = await UserModel.findById(req.user._id).select("-password");
 
@@ -139,9 +143,11 @@ const getUser = expressAsyncHandler(async (req, res) => {
     });
 });
 
-// @desc   Update user information
-// @route  PATCH /api/v1/user
-// @access Private
+/**
+ * @desc   Update user information
+ * @route  PATCH /api/v1/user
+ * @access Private
+ */
 const updateUser = expressAsyncHandler(async (req, res) => {
     const user = await UserModel.findById(req.user._id).select("-password");
 
@@ -171,9 +177,11 @@ const updateUser = expressAsyncHandler(async (req, res) => {
     });
 });
 
-// @desc   Check user login status
-// @route  GET /api/v1/login-status
-// @access Public
+/**
+ * @desc   Check user login status
+ * @route  GET /api/v1/login-status
+ * @access Public
+ */
 const userLoginStatus = expressAsyncHandler(async (req, res) => {
     const token = req.cookies.token;
     if (!token) {
@@ -188,9 +196,11 @@ const userLoginStatus = expressAsyncHandler(async (req, res) => {
     }
 });
 
-// @desc   Verify user email
-// @route  POST /api/v1/verify-email
-// @access Private
+/**
+ * @desc   Verify user email
+ * @route  POST /api/v1/verify-email
+ * @access Private
+ */
 const verifyEmail = expressAsyncHandler(async (req, res) => {
     const user = await UserModel.findById(req.user._id);
     if (!user) {
@@ -208,22 +218,24 @@ const verifyEmail = expressAsyncHandler(async (req, res) => {
     // If token exits --> delete the token
     if (token) {
         await TokenModel.deleteOne({ userId: user._id });
-    } // Create a new verification token using the user ID --> crypto
-    const verificationTokenString = verificationToken(user._id.toString());
-    // Hash the verification token
-    const hashedToken = hashToken(verificationTokenString);
+    }
 
-    // Create a new token document
+    // Create a new verification token using the user ID --> crypto
+    const verificationTokenString = verificationToken(user._id.toString());
+
+    // Hash the verification token
+    const hashedToken = hashToken(verificationTokenString); // Create a new token document
+
     await TokenModel.create({
         userId: user._id,
-        token: hashedToken,
+        verificationToken: hashedToken,
         createdAt: Date.now(),
         expiresAt: Date.now() + 24 * 60 * 60 * 1000, // 24 hours
     });
 
     // Verification link
     const CLIENT_URL = process.env.CLIENT_URL;
-    const verificationLink = `${CLIENT_URL}/verify-email?token=${verificationTokenString}&id=${user._id}`;
+    const verificationLink = `${CLIENT_URL}/verify-email?token=${verificationTokenString}`;
 
     // Send verification email
     const subject = "Email Verification - Authentication App";
@@ -243,4 +255,171 @@ const verifyEmail = expressAsyncHandler(async (req, res) => {
     }
 });
 
-export { registerUser, loginUser, logoutUser, getUser, updateUser, userLoginStatus, verifyEmail };
+/**
+ * @desc   Verify user email using token
+ * @route  GET /api/v1/verify-user/:verificationToken
+ * @access Public
+ */
+const verifyUser = expressAsyncHandler(async (req, res) => {
+    const { verificationToken } = req.params;
+
+    if (!verificationToken) {
+        return res.status(400).json({ message: "Invalid verification request" });
+    }
+
+    // Verify the token
+    const hashedToken = hashToken(verificationToken);
+    const token = await TokenModel.findOne({
+        verificationToken: hashedToken,
+        expiresAt: { $gt: Date.now() }, // Check if token is not expired
+    });
+
+    if (!token) {
+        return res.status(400).json({ message: "Invalid or expired verification token" });
+    }
+
+    // Find the user associated with the token
+    const user = await UserModel.findById(token.userId);
+
+    if (!user) {
+        return res.status(404).json({ message: "User not found" });
+    }
+
+    // Check if user is already verified
+    if (user.isVerified) {
+        return res.status(400).json({ message: "User is already verified" });
+    }
+
+    // Update user verification status
+    user.isVerified = true;
+    await user.save();
+
+    // Delete the token after successful verification
+    await TokenModel.deleteOne({ userId: user._id });
+
+    res.status(200).json({ message: "User verified successfully" });
+});
+
+/**
+ * @desc   Forgot password
+ * @route  POST /api/v1/forgot-password
+ * @access Public
+ */
+const forgotPassword = expressAsyncHandler(async (req, res) => {
+    const { email } = req.body;
+
+    // Validate input
+    if (!email) {
+        return res.status(400).json({ message: "Please provide an email address" });
+    }
+
+    // Check if user exists
+    const user = await UserModel.findOne({ email });
+    if (!user) {
+        return res.status(404).json({ message: "User not found" });
+    }
+
+    // Check if token exists
+    const existingToken = await TokenModel.findOne({ userId: user._id });
+    if (existingToken) {
+        await existingToken.deleteOne(); // Delete existing token if it exists
+    }
+
+    // Create a password reset token
+    const resetToken = verificationToken(user._id.toString());
+    const hashedToken = hashToken(resetToken);
+
+    // Create a token document
+    await TokenModel.create({
+        userId: user._id,
+        verificationToken: hashedToken,
+        createdAt: Date.now(),
+        expiresAt: Date.now() + 15 * 60 * 1000, // 15 minutes
+    });
+
+    // Password reset link
+    const CLIENT_URL = process.env.CLIENT_URL;
+    const resetLink = `${CLIENT_URL}/reset-password?token=${resetToken}`;
+
+    // Send password reset email
+    const subject = "Password Reset - Authentication App";
+    const send_to = user.email;
+    const sent_from = process.env.USER_EMAIL;
+    const reply_to = process.env.USER_EMAIL;
+    const template = "forgotPasswordTemplate";
+    const name = user.username;
+    const link = resetLink;
+
+    try {
+        await sendEmail(subject, send_to, sent_from, reply_to, template, name, link);
+        return res.status(200).json({ message: "Password reset email sent successfully" });
+    } catch (error) {
+        console.error("Error sending password reset email:", error);
+        return res.status(500).json({ message: "Failed to send password reset email" });
+    }
+});
+
+/**
+ * @desc   Reset password
+ * @route  POST /api/v1/reset-password/:resetPasswordToken
+ * @access Public
+ */
+const resetPassword = expressAsyncHandler(async (req, res) => {
+    const { resetPasswordToken } = req.params;
+    const { password } = req.body;
+
+    if (!resetPasswordToken || !password) {
+        return res.status(400).json({ message: "Invalid request" });
+    }
+
+    // hash the reset token
+    const hashedToken = hashToken(resetPasswordToken);
+
+    // Find the token in the database
+    const tokenUser = await TokenModel.findOne({
+        verificationToken: hashedToken,
+        expiresAt: { $gt: Date.now() }, // Check if token is not expired
+    });
+
+    if (!tokenUser) {
+        return res.status(400).json({ message: "Invalid or expired password reset token" });
+    }
+
+    // Find the user associated with the token
+    const user = await UserModel.findById(tokenUser.userId);
+
+    if (!user) {
+        return res.status(404).json({ message: "User not found" });
+    }
+
+    // Check if password is valid
+    if (password.length < 6) {
+        return res.status(400).json({ message: "Password must be at least 6 characters long" });
+    }
+
+    // Update user password
+    user.password = password; // This will trigger the pre-save middleware to hash the password
+    const updatedUser = await user.save();
+
+    if (!updatedUser) {
+        return res.status(500).json({ message: "Password reset failed" });
+    }
+
+    // Delete the token after successful password reset
+    await TokenModel.deleteOne({ userId: user._id });
+
+    res.status(200).json({ message: "Password reset successfully" });
+});
+
+export {
+    registerUser,
+    loginUser,
+    logoutUser,
+    getUser,
+    updateUser,
+    userLoginStatus,
+    verifyEmail,
+    verifyUser,
+    forgotPassword,
+    resetPassword,
+};

@@ -16,9 +16,19 @@ const __dirname = path.dirname(__filename);
  * @param {String} template
  * @param {String} name
  * @param {String} link
+ * @param {String} baseUrl - Base URL of your server for static assets
  * @returns {Promise<Object>}
  */
-const sendEmail = async (subject, send_to, sent_from, reply_to, template, name, link) => {
+const sendEmail = async (
+    subject,
+    send_to,
+    sent_from,
+    reply_to,
+    template,
+    name,
+    link,
+    baseUrl = null
+) => {
     let transporter;
 
     // Check which email service to use based on environment variables
@@ -82,7 +92,6 @@ const sendEmail = async (subject, send_to, sent_from, reply_to, template, name, 
     };
 
     transporter.use("compile", handlebars(handlebarsOptions));
-
     const mailOptions = {
         from: sent_from,
         to: send_to,
@@ -93,6 +102,7 @@ const sendEmail = async (subject, send_to, sent_from, reply_to, template, name, 
             subject: subject,
             name: name,
             link: link,
+            baseUrl: baseUrl || process.env.SERVER_URL,
         },
     };
 

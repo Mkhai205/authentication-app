@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import bcrypt from "bcrypt";
 
 const userSchema = new mongoose.Schema(
     {
@@ -24,7 +25,7 @@ const userSchema = new mongoose.Schema(
         photo: {
             type: String,
             default:
-                "https://github.com/Mkhai205/authentication-app/blob/main/backend/src/public/default-avatar-profile-icon.webp",
+                "https://raw.githubusercontent.com/Mkhai205/authentication-app/main/backend/src/public/default-avatar-profile-icon.webp",
         },
         bio: {
             type: String,
@@ -45,6 +46,64 @@ const userSchema = new mongoose.Schema(
         minimize: true,
     }
 );
+
+/**
+ * @desc    Hash password before saving
+ * @returns {Promise<void>}
+ */
+userSchema.pre("save", async function (next) {
+    // Only hash the password if it has been modified (or is new)
+    if (!this.isModified("password")) return next();
+
+    try {
+        // Hash password with cost of 10
+        const saltRounds = 10;
+        const salt = await bcrypt.genSalt(saltRounds);
+        this.password = await bcrypt.hash(this.password, salt);
+        next();
+    } catch (error) {
+        next(error);
+    }
+});
+
+/**
+ * @desc    Hash password before updating
+ * @returns {Promise<void>}
+ * @return {Function} next - Callback to proceed with the update
+ */
+userSchema.pre("findOneAndUpdate", async function (next) {
+    const update = this.getUpdate();
+
+    // Check if password is being updated
+    if (update.password || update.$set?.password) {
+        try {
+            const saltRounds = 12;
+            const salt = await bcrypt.genSalt(saltRounds);
+            const passwordToHash = update.password || update.$set.password;
+            const hashedPassword = await bcrypt.hash(passwordToHash, salt);
+
+            if (update.password) {
+                update.password = hashedPassword;
+            } else {
+                update.$set.password = hashedPassword;
+            }
+            next();
+        } catch (error) {
+            next(error);
+        }
+    } else {
+        next();
+    }
+});
+
+/**
+ * @desc    Compare candidate password with hashed password
+ * @param   {*} candidatePassword
+ * @returns Boolean
+ */
+userSchema.methods.comparePassword = async function (candidatePassword) {
+    return await bcrypt.compare(candidatePassword, this.password);
+};
 
 const UserModel = mongoose.model("User", userSchema);
 

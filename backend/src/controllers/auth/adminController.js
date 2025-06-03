@@ -1,12 +1,11 @@
 import expressAsyncHandler from "express-async-handler";
 import UserModel from "../../models/auth/UserModel.js";
 
-
 // @desc   Delete a user by admin
 // @route  DELETE /api/v1/admin/users/:id
 // @access Private/Admin
 const deleteUser = expressAsyncHandler(async (req, res) => {
-    const userId = req.params.id;
+    const userId = req.params.userId;
 
     // Check if the user exists
     const user = await UserModel.findById(userId);
