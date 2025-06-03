@@ -23,7 +23,8 @@ const userSchema = new mongoose.Schema(
         },
         photo: {
             type: String,
-            default: "../../public/default-avatar-profile-icon.webp",
+            default:
+                "https://github.com/Mkhai205/authentication-app/blob/main/backend/src/public/default-avatar-profile-icon.webp",
         },
         bio: {
             type: String,

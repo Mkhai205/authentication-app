@@ -1,7 +1,11 @@
 import expressAsyncHandler from "express-async-handler";
 import UserModel from "../../models/auth/UserModel.js";
+import TokenModel from "../../models/auth/tokenModel.js";
 import { generateToken, verifyToken } from "../../helpers/generateToken.js";
 import { comparePassword, hashPassword } from "../../helpers/hashPassword.js";
+import { hashToken, verificationToken } from "../../helpers/hashToken.js";
+import sendEmail from "../../helpers/sendEmail.js";
+import "dotenv/config";
 
 // @desc   Register a new user
 // @route  POST /api/v1/register
@@ -184,4 +188,59 @@ const userLoginStatus = expressAsyncHandler(async (req, res) => {
     }
 });
 
-export { registerUser, loginUser, logoutUser, getUser, updateUser, userLoginStatus };
+// @desc   Verify user email
+// @route  POST /api/v1/verify-email
+// @access Private
+const verifyEmail = expressAsyncHandler(async (req, res) => {
+    const user = await UserModel.findById(req.user._id);
+    if (!user) {
+        return res.status(404).json({ message: "User not found" });
+    }
+
+    // Check if user is already verified
+    if (user.isVerified) {
+        return res.status(400).json({ message: "User is already verified" });
+    }
+
+    // Update user verification status
+    const token = await TokenModel.findOne({ userId: user._id });
+
+    // If token exits --> delete the token
+    if (token) {
+        await TokenModel.deleteOne({ userId: user._id });
+    } // Create a new verification token using the user ID --> crypto
+    const verificationTokenString = verificationToken(user._id.toString());
+    // Hash the verification token
+    const hashedToken = hashToken(verificationTokenString);
+
+    // Create a new token document
+    await TokenModel.create({
+        userId: user._id,
+        token: hashedToken,
+        createdAt: Date.now(),
+        expiresAt: Date.now() + 24 * 60 * 60 * 1000, // 24 hours
+    });
+
+    // Verification link
+    const CLIENT_URL = process.env.CLIENT_URL;
+    const verificationLink = `${CLIENT_URL}/verify-email?token=${verificationTokenString}&id=${user._id}`;
+
+    // Send verification email
+    const subject = "Email Verification - Authentication App";
+    const send_to = user.email;
+    const sent_from = process.env.USER_EMAIL;
+    const reply_to = process.env.USER_EMAIL;
+    const template = "verifyEmailTemplate";
+    const name = user.username;
+    const link = verificationLink;
+
+    try {
+        await sendEmail(subject, send_to, sent_from, reply_to, template, name, link);
+        return res.status(200).json({ message: "Verification email sent successfully" });
+    } catch (error) {
+        console.error("Error sending verification email:", error);
+        return res.status(500).json({ message: "Failed to send verification email" });
+    }
+});
+
+export { registerUser, loginUser, logoutUser, getUser, updateUser, userLoginStatus, verifyEmail };
