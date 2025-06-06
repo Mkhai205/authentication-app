@@ -15,8 +15,8 @@ const app = express();
 // middlewares
 app.use(
     cors({
-        origin: process.env.CLIENT_UR,
-        methods: ["GET", "POST", "PUT", "DELETE"],
+        origin: process.env.CLIENT_URL,
+        methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
         credentials: true,
     })
 );

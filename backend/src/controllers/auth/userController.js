@@ -235,7 +235,7 @@ const verifyEmail = expressAsyncHandler(async (req, res) => {
 
     // Verification link
     const CLIENT_URL = process.env.CLIENT_URL;
-    const verificationLink = `${CLIENT_URL}/verify-email?token=${verificationTokenString}`;
+    const verificationLink = `${CLIENT_URL}/verify-email?verificationToken=${verificationTokenString}`;
 
     // Send verification email
     const subject = "Email Verification - Authentication App";
